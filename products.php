@@ -133,17 +133,7 @@
  $server_name = 'localhost';
  $username = 'root';
  $password = '';
- $dbname = 'platformDB';
-
- $conn = new mysql($servername, $username, $password, $dbname);
-
- // Check connection
- if ($conn->connect_error) {
-   die("Connection failed: " . $conn->connect_error);
- }
- 
- $sql = "INSERT INTO entrenceTBL (page, user_ip, browser_info, os_info) VALUES ('$requested_page', '$user_ip', '$browser_info', '$os_info')";
-
+ $dbname = "platformDB";
 
  $user_ip =  $_SERVER['REMOTE_ADDR'];
  $requested_page = $_SERVER['SCRIPT_NAME'];
@@ -151,9 +141,26 @@
  $browser_info = $user_agent_array['parent'];
  preg_match('/(?:\(Windows)(?:[^\(]*)(?:\))/', $_SERVER['HTTP_USER_AGENT'], $matches);
  $os_info = $matches[0];
-
  /*/(?:\()(?:[^\(]*)(?:\))/ generic (?:\(Windows)(?:[^\(]*)(?:\)) only for windows os name and version regex*/
 
+ 
+ // Create connection
+ $conn = new mysqli($server_name, $username, $password, $dbname, 3308);
+ // Check connection
+ if ($conn->connect_error) {
+  die("Connection failed: " . $conn->connect_error);
+ }
+ 
+ $sql = "INSERT INTO entrenceTBL (page, user_ip, browser_info, os_info) VALUES ('$requested_page', '$user_ip', '$browser_info', '$os_info')";
+
+ if ($conn->query($sql) === TRUE) {
+  echo "New record created successfully";
+ } else {
+  echo "Error: " . $sql . "<br>" . $conn->error;
+ }
+
+ $conn->close();
+ 
  ?>
 </body>
 
