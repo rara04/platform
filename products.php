@@ -21,36 +21,48 @@
  if ($conn->connect_error) {
   die("Connection failed: " . $conn->connect_error);
  }
-
+// automatically deletes all users no longer blocked after 5 minutes
  $delete_block = "DELETE FROM Block WHERE block_time<=DATE_SUB(NOW(), INTERVAL 5 MINUTE)";
  mysqli_query($conn, $delete_block);
 
+//check if a user is blocked before activating the site
  $select_block = "SELECT * FROM Block WHERE user_ip='$user_ip'";
- $check_block = mysqli_query($conn, $select_dos);
+ $check_block = mysqli_query($conn, $select_block);
  if (mysqli_num_rows($check_block) > 0) {
-    die("Too many requests, you are temporary blocked");
-
- function addRecord($sql_statement, $connection) {
-  if ($connection->query($sql_statement) === TRUE) {
-      echo "New record created successfully";
-  } else {
-    echo "Error: " . $sql_statement . "<br>" . $connection->error;
+    die("429 Too many requests, you are temporary blocked");
   }
+ 
+ //check acceptable browser
+ if (strpos($browser_info, 'Chrome') == TRUE and (int)$browser_info[8] < 7) {
+    die("406 Unacceptable browser. Chrome/70 and up");
+  }
+//opening log file
+ $logfile = fopen("log.txt", "a");
+
+
+ function addRecord($sql_statement, $connection, $logsfile) {
+  if ($connection->query($sql_statement) === TRUE) {
+      $txt = "New record created successfully";
+  } else {
+    $txt = "Error: " . $sql_statement . "<br>" . $connection->error;
+  }
+  fwrite($logsfile, $txt);
  }
 
  /* dos table handaling*/
  $insert_dos = "INSERT INTO dosTBL (user_ip, page, last_entrance) VALUES ('$user_ip', '$requested_page', NOW())";
- addRecord($insert_dos, $conn);
+ addRecord($insert_dos, $conn, $logfile);
  
+ // check if too many requests were made and block
  $select_dos = "SELECT * FROM dosTBL WHERE user_ip='$user_ip' AND DATE_ADD(last_entrance, INTERVAL 1 MINUTE) >= NOW()";
  $check_result = mysqli_query($conn, $select_dos);
  if (mysqli_num_rows($check_result) >= 5) {
 
   $block_insert = "INSERT INTO Block (user_ip, block_time) VALUES ('$user_ip', NOW())";
-  addRecord($block_insert, $conn);
-  die("Too many requests");
+  addRecord($block_insert, $conn, $logfile);
+  die("429 Too many requests, you are temporary blocked");
  }
-
+// entrance table handaling
  $select_sql = "SELECT user_ip FROM entrenceTBL WHERE user_ip='$user_ip'";
  $result = mysqli_query($conn, $select_sql);
 
@@ -58,17 +70,18 @@
   $sql = "UPDATE entrenceTBL SET page='$requested_page', browser_info='$browser_info', os_info='$os_info' WHERE user_ip='$user_ip'";
 
  if (mysqli_query($conn, $sql)) {
-    echo "Record updated successfully";
+    fwrite($logfile, "Record updated successfully");
  } else {
-    echo "Error updating record: " . mysqli_error($conn);
+    $txt = "Error updating record: " . mysqli_error($conn);
+    fwrite($logfile, $txt);
  }
  } else {
     $insert_entrance = "INSERT INTO entrenceTBL (page, user_ip, browser_info, os_info) VALUES ('$requested_page', '$user_ip', '$browser_info', '$os_info')";
 
-    addRecord($insert_entrance, $conn);
+    addRecord($insert_entrance, $conn, $logfile);
     
  }
- 
+ fclose($logfile);
  $conn->close();
  
  ?>
