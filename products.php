@@ -1,6 +1,80 @@
+<?php
+ $server_name = 'localhost';
+ $username = 'root';
+ $password = '';
+ $dbname = "platformDB";
+
+ $user_ip =  $_SERVER['REMOTE_ADDR'];
+ $requested_page = $_SERVER['SCRIPT_NAME'];
+ //$last_entrance = ('Y-m-d H:i:s');
+ preg_match('/(MSIE|(?!Gecko.+)Firefox|(?!AppleWebKit.+Chrome.+)Safari|(?!AppleWebKit.+)Chrome|AppleWebKit(?!.+Chrome|.+Safari)|Gecko(?!.+Firefox))(?: |\/)([\d\.apre]+)/',$_SERVER['HTTP_USER_AGENT'], $user_agent_array);
+ $browser_info = $user_agent_array[0];
+
+ preg_match('/(?:\(Windows)(?:[^\(]*)(?:\))/', $_SERVER['HTTP_USER_AGENT'], $matches);
+ $os_info = $matches[0];
+ /*/(?:\()(?:[^\(]*)(?:\))/ generic (?:\(Windows)(?:[^\(]*)(?:\)) only for windows os name and version regex*/
+
+ 
+ // Create connection
+ $conn = new mysqli($server_name, $username, $password, $dbname, 3308);
+ // Check connection
+ if ($conn->connect_error) {
+  die("Connection failed: " . $conn->connect_error);
+ }
+
+ $delete_block = "DELETE FROM Block WHERE block_time<=DATE_SUB(NOW(), INTERVAL 5 MINUTE)";
+ mysqli_query($conn, $delete_block);
+
+ $select_block = "SELECT * FROM Block WHERE user_ip='$user_ip'";
+ $check_block = mysqli_query($conn, $select_dos);
+ if (mysqli_num_rows($check_block) > 0) {
+    die("Too many requests, you are temporary blocked");
+
+ function addRecord($sql_statement, $connection) {
+  if ($connection->query($sql_statement) === TRUE) {
+      echo "New record created successfully";
+  } else {
+    echo "Error: " . $sql_statement . "<br>" . $connection->error;
+  }
+ }
+
+ /* dos table handaling*/
+ $insert_dos = "INSERT INTO dosTBL (user_ip, page, last_entrance) VALUES ('$user_ip', '$requested_page', NOW())";
+ addRecord($insert_dos, $conn);
+ 
+ $select_dos = "SELECT * FROM dosTBL WHERE user_ip='$user_ip' AND DATE_ADD(last_entrance, INTERVAL 1 MINUTE) >= NOW()";
+ $check_result = mysqli_query($conn, $select_dos);
+ if (mysqli_num_rows($check_result) >= 5) {
+
+  $block_insert = "INSERT INTO Block (user_ip, block_time) VALUES ('$user_ip', NOW())";
+  addRecord($block_insert, $conn);
+  die("Too many requests");
+ }
+
+ $select_sql = "SELECT user_ip FROM entrenceTBL WHERE user_ip='$user_ip'";
+ $result = mysqli_query($conn, $select_sql);
+
+ if (mysqli_num_rows($result) > 0) {
+  $sql = "UPDATE entrenceTBL SET page='$requested_page', browser_info='$browser_info', os_info='$os_info' WHERE user_ip='$user_ip'";
+
+ if (mysqli_query($conn, $sql)) {
+    echo "Record updated successfully";
+ } else {
+    echo "Error updating record: " . mysqli_error($conn);
+ }
+ } else {
+    $insert_entrance = "INSERT INTO entrenceTBL (page, user_ip, browser_info, os_info) VALUES ('$requested_page', '$user_ip', '$browser_info', '$os_info')";
+
+    addRecord($insert_entrance, $conn);
+    
+ }
+ 
+ $conn->close();
+ 
+ ?>
+
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
 
   <meta charset="utf-8">
@@ -129,39 +203,7 @@
   <!-- Bootstrap core JavaScript -->
   <script src="vendor/jquery/jquery.min.js"></script>
   <script src="vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
- <?php
- $server_name = 'localhost';
- $username = 'root';
- $password = '';
- $dbname = "platformDB";
-
- $user_ip =  $_SERVER['REMOTE_ADDR'];
- $requested_page = $_SERVER['SCRIPT_NAME'];
- $user_agent_array = get_browser();
- $browser_info = $user_agent_array['parent'];
- preg_match('/(?:\(Windows)(?:[^\(]*)(?:\))/', $_SERVER['HTTP_USER_AGENT'], $matches);
- $os_info = $matches[0];
- /*/(?:\()(?:[^\(]*)(?:\))/ generic (?:\(Windows)(?:[^\(]*)(?:\)) only for windows os name and version regex*/
-
  
- // Create connection
- $conn = new mysqli($server_name, $username, $password, $dbname, 3308);
- // Check connection
- if ($conn->connect_error) {
-  die("Connection failed: " . $conn->connect_error);
- }
- 
- $sql = "INSERT INTO entrenceTBL (page, user_ip, browser_info, os_info) VALUES ('$requested_page', '$user_ip', '$browser_info', '$os_info')";
-
- if ($conn->query($sql) === TRUE) {
-  echo "New record created successfully";
- } else {
-  echo "Error: " . $sql . "<br>" . $conn->error;
- }
-
- $conn->close();
- 
- ?>
 </body>
 
 </html>
