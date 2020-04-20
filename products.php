@@ -14,73 +14,110 @@
  $os_info = $matches[0];
  /*/(?:\()(?:[^\(]*)(?:\))/ generic (?:\(Windows)(?:[^\(]*)(?:\)) only for windows os name and version regex*/
 
- 
+ //opening log file
+ $logfile = fopen("log.txt", "a");
+
  // Create connection
  $conn = new mysqli($server_name, $username, $password, $dbname, 3308);
  // Check connection
  if ($conn->connect_error) {
   die("Connection failed: " . $conn->connect_error);
  }
+
 // automatically deletes all users no longer blocked after 5 minutes
  $delete_block = "DELETE FROM Block WHERE block_time<=DATE_SUB(NOW(), INTERVAL 5 MINUTE)";
  mysqli_query($conn, $delete_block);
 
 //check if a user is blocked before activating the site
- $select_block = "SELECT * FROM Block WHERE user_ip='$user_ip'";
- $check_block = mysqli_query($conn, $select_block);
- if (mysqli_num_rows($check_block) > 0) {
-    die("429 Too many requests, you are temporary blocked");
+ try {
+    $select_block = $conn->prepare("SELECT * FROM Block WHERE user_ip=?");
+    $select_block->bind_param("s", $user_ip);
+    $select_block->execute();
+    $select_block->fetch();
+    $number_of_rows = $select_block->num_rows;
+    if ($number_of_rows > 0) {
+      die("429 Too many requests, you are temporary blocked");
+    }
+    $txt = "successfully executed";
+  } catch (Exception $e) {
+    $txt = $e->getMessage();
+  } finally {
+    fwrite($logfile, $txt);
+    $select_block->close();
   }
  
  //check acceptable browser
  if (strpos($browser_info, 'Chrome') == TRUE and (int)$browser_info[8] < 7) {
     die("406 Unacceptable browser. Chrome/70 and up");
   }
-//opening log file
- $logfile = fopen("log.txt", "a");
 
 
- function addRecord($sql_statement, $connection, $logsfile) {
-  if ($connection->query($sql_statement) === TRUE) {
-      $txt = "New record created successfully";
+ function addRecord1($statement, $connection, $logsfile) {
+  if ($statement->execute()) {
+    $txt = "New record created successfully";
   } else {
-    $txt = "Error: " . $sql_statement . "<br>" . $connection->error;
+    $txt = "Error: " . $statement . $connection->error;
   }
   fwrite($logsfile, $txt);
+  $statement->close();
  }
 
  /* dos table handaling*/
- $insert_dos = "INSERT INTO dosTBL (user_ip, page, last_entrance) VALUES ('$user_ip', '$requested_page', NOW())";
- addRecord($insert_dos, $conn, $logfile);
+ 
+ try {
+  // prepare and bind
+   $dos_insert = $conn->prepare("INSERT INTO dosTBL (user_ip, page, last_entrance) VALUES (?, ?, NOW())");
+   $dos_insert->bind_param("ss", $user_ip, $requested_page);
+   addRecord1($dos_insert, $conn, $logfile);
+   $txt = "executed successfully";
+ } catch (Exception $e) {
+   $txt = $e->getMessage();
+  } finally {
+    fwrite($logfile, $txt);
+  }
  
  // check if too many requests were made and block
  $select_dos = "SELECT * FROM dosTBL WHERE user_ip='$user_ip' AND DATE_ADD(last_entrance, INTERVAL 1 MINUTE) >= NOW()";
  $check_result = mysqli_query($conn, $select_dos);
  if (mysqli_num_rows($check_result) >= 5) {
-
-  $block_insert = "INSERT INTO Block (user_ip, block_time) VALUES ('$user_ip', NOW())";
-  addRecord($block_insert, $conn, $logfile);
-  die("429 Too many requests, you are temporary blocked");
- }
-// entrance table handaling
- $select_sql = "SELECT user_ip FROM entrenceTBL WHERE user_ip='$user_ip'";
- $result = mysqli_query($conn, $select_sql);
-
- if (mysqli_num_rows($result) > 0) {
-  $sql = "UPDATE entrenceTBL SET page='$requested_page', browser_info='$browser_info', os_info='$os_info' WHERE user_ip='$user_ip'";
-
- if (mysqli_query($conn, $sql)) {
-    fwrite($logfile, "Record updated successfully");
- } else {
-    $txt = "Error updating record: " . mysqli_error($conn);
+  try {
+    $block_insert = $conn->prepare("INSERT INTO Block (user_ip, block_time) VALUES (?, NOW())");
+    $block_insert->bind_param("s", $user_ip);
+    addRecord1($block_insert, $conn, $logfile);
+    die("429 Too many requests, you are temporary blocked");
+    $txt = "executed successfully";
+  } catch (Exception $e) {
+   $txt = $e->getMessage();
+  } finally {
     fwrite($logfile, $txt);
+  }
  }
- } else {
-    $insert_entrance = "INSERT INTO entrenceTBL (page, user_ip, browser_info, os_info) VALUES ('$requested_page', '$user_ip', '$browser_info', '$os_info')";
 
-    addRecord($insert_entrance, $conn, $logfile);
-    
+// entrance table handaling
+ try {
+   $select_sql = $conn->prepare("SELECT user_ip FROM entrenceTBL WHERE user_ip=?");
+   $select_sql->bind_param("s", $user_ip);
+   $select_sql->execute();
+   $select_sql->fetch();
+   $number_of_rows = $select_sql->num_rows;
+   $select_sql->close();
+   if ($number_of_rows > 0) {
+    $update_entrance = $conn->prepare("UPDATE entrenceTBL SET page=?, browser_info=?, os_info=? WHERE user_ip=?");
+    $update_entrance->bind_param("ssss", $requested_page, $browser_info, $os_info, $user_ip);
+    $update_entrance->execute();
+    $update_entrance->close();
+   } else {
+    $insert_entrance = $conn->prepare("INSERT INTO entrenceTBL (page, user_ip, browser_info, os_info) VALUES (?, ?, ?, ?)");
+    $insert_entrance->bind_param("ssss", $requested_page, $user_ip, $browser_info, $os_info);
+    addRecord1($insert_entrance, $conn, $logfile);
+    } 
+    $txt = "successfully executed";
+  } catch (Exception $e) {
+   $txt = $e->getMessage();
+ } finally{
+  fwrite($logfile, $txt);
  }
+    
  fclose($logfile);
  $conn->close();
  
